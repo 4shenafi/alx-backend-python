@@ -1,19 +1,19 @@
+#!/usr/bin/python3
+
 import mysql.connector
-from dotenv import load_dotenv
-import os
 
-load_dotenv()
 
+# ✅ Generator: Stream users in batches
 def stream_users_in_batches(batch_size):
-    conn = mysql.connector.connect(
-        host=os.getenv("MYSQL_HOST"),
-        user=os.getenv("MYSQL_USER"),
-        password=os.getenv("MYSQL_PASSWORD"),
-        database=os.getenv("MYSQL_DATABASE")
+    connection = mysql.connector.connect(
+        host="localhost",
+        user="your_username",
+        password="your_password",
+        database="ALX_prodev"
     )
-    cursor = conn.cursor(dictionary=True)
-    cursor.execute("SELECT * FROM users")
-    
+    cursor = connection.cursor()
+    cursor.execute("SELECT user_id, name, email, age FROM user_data")
+
     while True:
         rows = cursor.fetchmany(batch_size)
         if not rows:
@@ -21,10 +21,10 @@ def stream_users_in_batches(batch_size):
         yield rows
 
     cursor.close()
-    conn.close()
+    connection.close()
+
 
 def batch_processing():
-    for batch in stream_users_in_batches(5):  # You can change batch size here
-        filtered = [user for user in batch if user['age'] > 25]
-        for user in filtered:
-            print(user)
+    for batch in stream_users_in_batches(batch_size=10):
+        filtered = [user for user in batch if user[3] > 25]  # user[3] = age
+        yield filtered
