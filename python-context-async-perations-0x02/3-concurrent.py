@@ -1,4 +1,3 @@
-# 3-concurrent.py
 import asyncio
 import aiosqlite
 
@@ -14,7 +13,7 @@ async def async_fetch_older_users():
     async with aiosqlite.connect("my_database.db") as db:
         async with db.execute("SELECT * FROM users WHERE age > 40") as cursor:
             rows = await cursor.fetchall()
-            print("\nUsers older than 40:")
+            print("Users older than 40:")
             for row in rows:
                 print(row)
 
