@@ -1,4 +1,3 @@
-# 0-log_queries.py
 import sqlite3
 import functools
 
