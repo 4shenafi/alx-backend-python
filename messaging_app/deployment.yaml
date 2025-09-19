@@ -1,0 +1,146 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: messaging-app-deployment
+  labels:
+    app: messaging-app
+    version: v1.0
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: messaging-app
+  template:
+    metadata:
+      labels:
+        app: messaging-app
+        version: v1.0
+    spec:
+      containers:
+      - name: messaging-app
+        image: messaging-app:latest
+        ports:
+        - containerPort: 8000
+        env:
+        - name: DEBUG
+          value: "1"
+        - name: DJANGO_SETTINGS_MODULE
+          value: "messaging_app.settings"
+        - name: SECRET_KEY
+          value: "django-insecure-t4a!i7mfu5p947_h#0o+blyr2qayt&y%cab*f8uznpt(&tpl2&"
+        - name: ALLOWED_HOSTS
+          value: "localhost,127.0.0.1,0.0.0.0"
+        - name: MYSQL_DATABASE
+          value: "messaging_db"
+        - name: MYSQL_USER
+          value: "messaging_user"
+        - name: MYSQL_PASSWORD
+          value: "messaging_password"
+        - name: DB_HOST
+          value: "mysql-service"
+        - name: DB_PORT
+          value: "3306"
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 8000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 8000
+          initialDelaySeconds: 5
+          periodSeconds: 5
+        command: ["/bin/sh"]
+        args:
+          - -c
+          - |
+            python3 manage.py migrate &&
+            python3 manage.py runserver 0.0.0.0:8000
+      restartPolicy: Always
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: messaging-app-service
+  labels:
+    app: messaging-app
+spec:
+  type: ClusterIP
+  ports:
+  - port: 8000
+    targetPort: 8000
+    protocol: TCP
+    name: http
+  selector:
+    app: messaging-app
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mysql-deployment
+  labels:
+    app: mysql
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mysql
+  template:
+    metadata:
+      labels:
+        app: mysql
+    spec:
+      containers:
+      - name: mysql
+        image: mysql:8.0
+        ports:
+        - containerPort: 3306
+        env:
+        - name: MYSQL_DATABASE
+          value: "messaging_db"
+        - name: MYSQL_USER
+          value: "messaging_user"
+        - name: MYSQL_PASSWORD
+          value: "messaging_password"
+        - name: MYSQL_ROOT_PASSWORD
+          value: "root_password"
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "1Gi"
+            cpu: "500m"
+        volumeMounts:
+        - name: mysql-storage
+          mountPath: /var/lib/mysql
+        command: ["--default-authentication-plugin=mysql_native_password"]
+      volumes:
+      - name: mysql-storage
+        emptyDir: {}
+      restartPolicy: Always
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mysql-service
+  labels:
+    app: mysql
+spec:
+  type: ClusterIP
+  ports:
+  - port: 3306
+    targetPort: 3306
+    protocol: TCP
+    name: mysql
+  selector:
+    app: mysql
