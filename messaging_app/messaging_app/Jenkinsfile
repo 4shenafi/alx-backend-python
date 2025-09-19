@@ -11,7 +11,7 @@ pipeline {
     stages {
         stage('Checkout') {
             steps {
-                checkout scm
+                git branch: 'main', credentialsId: 'github-credentials', url: 'https://github.com/4shenafi/alx-backend-python.git'
                 echo 'Code checked out successfully'
             }
         }
@@ -21,8 +21,8 @@ pipeline {
                 sh '''
                     python3 -m venv venv
                     source venv/bin/activate
-                    pip install --upgrade pip
-                    pip install -r requirements.txt
+                    pip3 install --upgrade pip
+                    pip3 install -r messaging_app/requirements.txt
                 '''
             }
         }
@@ -31,7 +31,9 @@ pipeline {
             steps {
                 sh '''
                     source venv/bin/activate
+                    cd messaging_app
                     python manage.py test --verbosity=2
+                    pytest --junitxml=test-results.xml
                 '''
             }
             post {
@@ -53,6 +55,7 @@ pipeline {
             steps {
                 sh '''
                     source venv/bin/activate
+                    cd messaging_app
                     flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
                     flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
                 '''
