@@ -1,0 +1,258 @@
+#!/bin/bash
+
+# kubctl-0x02 - Blue-Green Deployment Script
+# This script deploys blue and green versions and checks for errors
+
+set -e  # Exit on any error
+
+echo "🚀 Starting Blue-Green Deployment..."
+
+# Function to check if kubectl is available
+check_kubectl() {
+    if ! command -v kubectl &> /dev/null; then
+        echo "❌ kubectl is not installed or not in PATH"
+        exit 1
+    fi
+    echo "✅ kubectl is available"
+}
+
+# Function to deploy blue version
+deploy_blue() {
+    echo "🔵 Deploying Blue version..."
+    
+    # Update blue deployment labels
+    sed -i 's/environment: blue/environment: blue/g' blue_deployment.yaml
+    sed -i 's/name: messaging-app-deployment/name: messaging-app-blue-deployment/g' blue_deployment.yaml
+    sed -i 's/app: messaging-app/app: messaging-app\n    environment: blue/g' blue_deployment.yaml
+    
+    kubectl apply -f blue_deployment.yaml
+    
+    echo "⏳ Waiting for blue deployment to be ready..."
+    kubectl rollout status deployment/messaging-app-blue-deployment --timeout=300s
+    
+    echo "✅ Blue deployment completed"
+}
+
+# Function to deploy green version
+deploy_green() {
+    echo "🟢 Deploying Green version..."
+    
+    kubectl apply -f green_deployment.yaml
+    
+    echo "⏳ Waiting for green deployment to be ready..."
+    kubectl rollout status deployment/messaging-app-green-deployment --timeout=300s
+    
+    echo "✅ Green deployment completed"
+}
+
+# Function to apply blue-green services
+apply_services() {
+    echo "🔧 Applying Blue-Green services..."
+    
+    kubectl apply -f kubeservice.yaml
+    
+    echo "✅ Blue-Green services applied"
+}
+
+# Function to check blue deployment logs
+check_blue_logs() {
+    echo "🔍 Checking Blue deployment logs for errors..."
+    
+    BLUE_PODS=$(kubectl get pods -l app=messaging-app,environment=blue --no-headers -o custom-columns=":metadata.name")
+    
+    if [ -z "$BLUE_PODS" ]; then
+        echo "⚠️  No blue pods found"
+        return 1
+    fi
+    
+    for pod in $BLUE_PODS; do
+        echo "📋 Logs for Blue pod: $pod"
+        echo "----------------------------------------"
+        kubectl logs "$pod" --tail=50 || echo "⚠️  Could not retrieve logs for $pod"
+        echo ""
+        
+        # Check for error patterns
+        if kubectl logs "$pod" 2>&1 | grep -i "error\|exception\|failed\|fatal" > /dev/null; then
+            echo "❌ Errors found in Blue pod: $pod"
+            kubectl logs "$pod" 2>&1 | grep -i "error\|exception\|failed\|fatal"
+        else
+            echo "✅ No errors found in Blue pod: $pod"
+        fi
+        echo ""
+    done
+}
+
+# Function to check green deployment logs
+check_green_logs() {
+    echo "🔍 Checking Green deployment logs for errors..."
+    
+    GREEN_PODS=$(kubectl get pods -l app=messaging-app,environment=green --no-headers -o custom-columns=":metadata.name")
+    
+    if [ -z "$GREEN_PODS" ]; then
+        echo "⚠️  No green pods found"
+        return 1
+    fi
+    
+    for pod in $GREEN_PODS; do
+        echo "📋 Logs for Green pod: $pod"
+        echo "----------------------------------------"
+        kubectl logs "$pod" --tail=50 || echo "⚠️  Could not retrieve logs for $pod"
+        echo ""
+        
+        # Check for error patterns
+        if kubectl logs "$pod" 2>&1 | grep -i "error\|exception\|failed\|fatal" > /dev/null; then
+            echo "❌ Errors found in Green pod: $pod"
+            kubectl logs "$pod" 2>&1 | grep -i "error\|exception\|failed\|fatal"
+        else
+            echo "✅ No errors found in Green pod: $pod"
+        fi
+        echo ""
+    done
+}
+
+# Function to verify deployments
+verify_deployments() {
+    echo "🔍 Verifying deployments..."
+    
+    echo "📊 Blue deployment status:"
+    kubectl get deployment messaging-app-blue-deployment -o wide
+    
+    echo ""
+    echo "📊 Green deployment status:"
+    kubectl get deployment messaging-app-green-deployment -o wide
+    
+    echo ""
+    echo "📦 Blue pods:"
+    kubectl get pods -l app=messaging-app,environment=blue -o wide
+    
+    echo ""
+    echo "📦 Green pods:"
+    kubectl get pods -l app=messaging-app,environment=green -o wide
+    
+    echo ""
+    echo "🌐 Services:"
+    kubectl get svc -l app=messaging-app -o wide
+}
+
+# Function to test blue-green switching
+test_blue_green_switching() {
+    echo "🔄 Testing Blue-Green switching capability..."
+    
+    # Test blue service
+    echo "🔵 Testing Blue service..."
+    kubectl port-forward service/messaging-app-blue-service 8081:8000 &
+    BLUE_PID=$!
+    sleep 5
+    
+    if curl -s --max-time 10 "http://localhost:8081" > /dev/null; then
+        echo "✅ Blue service is responding"
+    else
+        echo "❌ Blue service is not responding"
+    fi
+    
+    kill $BLUE_PID 2>/dev/null || true
+    
+    # Test green service
+    echo "🟢 Testing Green service..."
+    kubectl port-forward service/messaging-app-green-service 8082:8000 &
+    GREEN_PID=$!
+    sleep 5
+    
+    if curl -s --max-time 10 "http://localhost:8082" > /dev/null; then
+        echo "✅ Green service is responding"
+    else
+        echo "❌ Green service is not responding"
+    fi
+    
+    kill $GREEN_PID 2>/dev/null || true
+}
+
+# Function to show deployment summary
+show_deployment_summary() {
+    echo "📊 Blue-Green Deployment Summary"
+    echo "==============================="
+    
+    echo "🔵 Blue Deployment:"
+    kubectl get deployment messaging-app-blue-deployment -o jsonpath='{.status.readyReplicas}' 2>/dev/null || echo "0"
+    echo " ready replicas"
+    
+    echo "🟢 Green Deployment:"
+    kubectl get deployment messaging-app-green-deployment -o jsonpath='{.status.readyReplicas}' 2>/dev/null || echo "0"
+    echo " ready replicas"
+    
+    echo ""
+    echo "🌐 Active Services:"
+    kubectl get svc -l app=messaging-app --no-headers | wc -l
+    echo " services"
+    
+    echo ""
+    echo "📦 Total Pods:"
+    kubectl get pods -l app=messaging-app --no-headers | wc -l
+    echo " pods"
+    
+    echo ""
+    echo "🎯 Current Traffic Target:"
+    kubectl get svc messaging-app-blue-green-service -o jsonpath='{.spec.selector.environment}' 2>/dev/null || echo "unknown"
+    echo " environment"
+}
+
+# Function to demonstrate traffic switching
+demonstrate_traffic_switching() {
+    echo "🔄 Demonstrating traffic switching..."
+    
+    echo "📋 Current traffic routing:"
+    kubectl get svc messaging-app-blue-green-service -o yaml | grep -A 5 selector
+    
+    echo ""
+    echo "💡 To switch traffic from Blue to Green, run:"
+    echo "kubectl patch service messaging-app-blue-green-service -p '{\"spec\":{\"selector\":{\"environment\":\"green\"}}}'"
+    
+    echo ""
+    echo "💡 To switch traffic from Green to Blue, run:"
+    echo "kubectl patch service messaging-app-blue-green-service -p '{\"spec\":{\"selector\":{\"environment\":\"blue\"}}}'"
+}
+
+# Main execution
+main() {
+    echo "🎯 Blue-Green Deployment Script"
+    echo "=============================="
+    
+    # Check prerequisites
+    check_kubectl
+    
+    # Deploy blue version
+    deploy_blue
+    
+    # Deploy green version
+    deploy_green
+    
+    # Apply services
+    apply_services
+    
+    # Wait for deployments to stabilize
+    echo "⏳ Waiting for deployments to stabilize..."
+    sleep 30
+    
+    # Check logs for errors
+    check_blue_logs
+    check_green_logs
+    
+    # Verify deployments
+    verify_deployments
+    
+    # Test blue-green switching
+    test_blue_green_switching
+    
+    # Show summary
+    show_deployment_summary
+    
+    # Demonstrate traffic switching
+    demonstrate_traffic_switching
+    
+    echo ""
+    echo "🎉 Blue-Green deployment completed successfully!"
+    echo "💡 Both Blue and Green versions are now running and ready for traffic switching"
+}
+
+# Run main function
+main "$@"
