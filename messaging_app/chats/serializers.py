@@ -1,48 +1,46 @@
-# messaging_app/chats/serializers.py
 from rest_framework import serializers
 from .models import User, Conversation, Message
 
+
 class UserSerializer(serializers.ModelSerializer):
+    full_name = serializers.SerializerMethodField()
+
+    def get_full_name(self, obj):
+        return f"{obj.first_name} {obj.last_name}"
+
     class Meta:
         model = User
-        fields = ['user_id', 'first_name', 'last_name', 'email', 'phone_number', 'role']
+        fields = [
+            'user_id', 'first_name', 'last_name', 'full_name',
+            'email', 'phone_number', 'role', 'created_at'
+        ]
+
 
 class MessageSerializer(serializers.ModelSerializer):
-    sender = UserSerializer(read_only=True)
-    message_body = serializers.CharField(max_length=5000)
+    sender_email = serializers.SerializerMethodField()
+    message_body = serializers.CharField(max_length=2000)
+
+    def get_sender_email(self, obj):
+        return obj.sender.email
 
     class Meta:
         model = Message
-        fields = ['message_id', 'sender', 'conversation', 'message_body', 'sent_at']
+        fields = [
+            'message_id', 'sender_email', 'conversation',
+            'message_body', 'sent_at', 'is_read'
+        ]
 
-    def validate_message_body(self, value):
-        if not value.strip():
-            raise serializers.ValidationError("Message body cannot be empty.")
-        return value
 
 class ConversationSerializer(serializers.ModelSerializer):
     participants = UserSerializer(many=True, read_only=True)
     messages = MessageSerializer(many=True, read_only=True)
-    participant_ids = serializers.ListField(
-        child=serializers.CharField(), write_only=True
-    )
+
+    def validate(self, data):
+        # Example validation: don't allow empty conversations (this is just illustrative)
+        if not data.get("participants") and self.instance is None:
+            raise serializers.ValidationError("A conversation must include at least one participant.")
+        return data
 
     class Meta:
         model = Conversation
-        fields = ['conversation_id', 'participants', 'messages', 'created_at', 'participant_ids']
-
-    def create(self, validated_data):
-        participant_ids = validated_data.pop('participant_ids', [])
-        conversation = Conversation.objects.create(**validated_data)
-        for user_id in participant_ids:
-            try:
-                user = User.objects.get(user_id=user_id)
-                conversation.participants.add(user)
-            except User.DoesNotExist:
-                raise serializers.ValidationError(f"User with ID {user_id} does not exist.")
-        return conversation
-
-    def get_participants_count(self, obj):
-        return obj.participants.count()
-
-    participants_count = serializers.SerializerMethodField()
+        fields = ['conversation_id', 'participants', 'created_at', 'messages']

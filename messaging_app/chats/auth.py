@@ -1,23 +1,29 @@
-# Custom authentication for the chats app
-
-from rest_framework.authentication import TokenAuthentication
+# chats/auth.py
+from rest_framework_simplejwt.authentication import JWTAuthentication
 from rest_framework.exceptions import AuthenticationFailed
-from django.utils.translation import gettext_lazy as _
+from django.contrib.auth import get_user_model
 
+User = get_user_model()
 
-class CustomTokenAuthentication(TokenAuthentication):
+class CustomJWTAuthentication(JWTAuthentication):
     """
-    Custom token authentication.
+    Custom JWT authentication that includes additional user validation
     """
-
-    def authenticate_credentials(self, key):
-        model = self.get_model()
+    
+    def authenticate(self, request):
         try:
-            token = model.objects.select_related("user").get(key=key)
-        except model.DoesNotExist:
-            raise AuthenticationFailed(_("Invalid token."))
-
-        if not token.user.is_active:
-            raise AuthenticationFailed(_("User inactive or deleted."))
-
-        return (token.user, token)
+            # Get the parent's authentication result
+            auth_result = super().authenticate(request)
+            if auth_result is None:
+                return None
+                
+            user, token = auth_result
+            
+            # Add any additional user validation here
+            if not user.is_active:
+                raise AuthenticationFailed('User is not active')
+                
+            return (user, token)
+            
+        except Exception as e:
+            raise AuthenticationFailed(str(e))
