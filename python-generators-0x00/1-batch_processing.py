@@ -14,9 +14,6 @@ def stream_users_in_batches(batch_size):
             break
         yield rows
 
-    cursor.close()
-    connection.close()
-
 
 def batch_processing(batch_size):
     for batch in stream_users_in_batches(batch_size):
