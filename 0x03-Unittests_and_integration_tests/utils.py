@@ -1,67 +1,75 @@
 #!/usr/bin/env python3
-"""
-Utility functions for testing purposes.
-This module provides functions for accessing nested maps, making HTTP requests,
-and memoization.
+"""Generic utilities for github org client.
 """
 import requests
 from functools import wraps
-from typing import Dict, Tuple, Any, Union
+from typing import (
+    Mapping,
+    Sequence,
+    Any,
+    Dict,
+    Callable,
+)
+
+__all__ = [
+    "access_nested_map",
+    "get_json",
+    "memoize",
+]
 
 
-def access_nested_map(nested_map: Dict, path: Tuple[str, ...]) -> Any:
-    """
-    Access a value in a nested map using a tuple of keys.
-    
-    Args:
-        nested_map: The nested dictionary to access
-        path: Tuple of keys representing the path to the value
-        
-    Returns:
-        The value at the specified path
-        
-    Raises:
-        KeyError: If any key in the path doesn't exist
+def access_nested_map(nested_map: Mapping, path: Sequence) -> Any:
+    """Access nested map with key path.
+    Parameters
+    ----------
+    nested_map: Mapping
+        A nested map
+    path: Sequence
+        a sequence of key representing a path to the value
+    Example
+    -------
+    >>> nested_map = {"a": {"b": {"c": 1}}}
+    >>> access_nested_map(nested_map, ["a", "b", "c"])
+    1
     """
     for key in path:
-        if not isinstance(nested_map, dict) or key not in nested_map:
+        if not isinstance(nested_map, Mapping):
             raise KeyError(key)
         nested_map = nested_map[key]
+
     return nested_map
 
 
 def get_json(url: str) -> Dict:
-    """
-    Get JSON data from a URL.
-    
-    Args:
-        url: The URL to fetch JSON from
-        
-    Returns:
-        The JSON data as a dictionary
+    """Get JSON from remote URL.
     """
     response = requests.get(url)
     return response.json()
 
 
-def memoize(func):
+def memoize(fn: Callable) -> Callable:
+    """Decorator to memoize a method.
+    Example
+    -------
+    class MyClass:
+        @memoize
+        def a_method(self):
+            print("a_method called")
+            return 42
+    >>> my_object = MyClass()
+    >>> my_object.a_method
+    a_method called
+    42
+    >>> my_object.a_method
+    42
     """
-    Memoize decorator that caches function results.
-    
-    Args:
-        func: The function to memoize
-        
-    Returns:
-        The memoized function
-    """
-    cache = {}
-    
-    @wraps(func)
-    def wrapper(self):
-        if func not in cache:
-            cache[func] = func(self)
-        return cache[func]
-    
-    # Add cache attribute for testing
-    wrapper.cache = cache
-    return property(wrapper)
+    attr_name = "_{}".format(fn.__name__)
+
+    @wraps(fn)
+    def memoized(self):
+        """"memoized wraps"""
+        if not hasattr(self, attr_name):
+            setattr(self, attr_name, fn(self))
+        return getattr(self, attr_name)
+
+    return property(memoized)
