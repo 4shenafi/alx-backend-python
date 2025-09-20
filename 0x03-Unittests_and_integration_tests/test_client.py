@@ -95,7 +95,7 @@ class TestIntegrationGithubOrgClient(unittest.TestCase):
     """
     Integration test for the GithubOrgClient.
     """
-    
+
     @classmethod
     def setUpClass(cls):
         """
