@@ -2,13 +2,13 @@
 #!/usr/bin/env python3
 """A github org client
 """
+import requests
 from typing import (
     List,
     Dict,
 )
 
 from utils import (
-    get_json,
     access_nested_map,
     memoize,
 )
@@ -26,7 +26,8 @@ class GithubOrgClient:
     @memoize
     def org(self) -> Dict:
         """Memoize org"""
-        return get_json(self.ORG_URL.format(org=self._org_name))
+        response = requests.get(self.ORG_URL.format(org=self._org_name))
+        return response.json()
 
     @property
     def _public_repos_url(self) -> str:
@@ -36,7 +37,8 @@ class GithubOrgClient:
     @memoize
     def repos_payload(self) -> Dict:
         """Memoize repos payload"""
-        return get_json(self._public_repos_url)
+        response = requests.get(self._public_repos_url)
+        return response.json()
 
     def public_repos(self, license: str = None) -> List[str]:
         """Public repos"""
