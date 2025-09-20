@@ -95,6 +95,7 @@ class TestIntegrationGithubOrgClient(unittest.TestCase):
     """
     Integration test for the GithubOrgClient.
     """
+    
     @classmethod
     def setUpClass(cls):
         """
@@ -119,6 +120,12 @@ class TestIntegrationGithubOrgClient(unittest.TestCase):
         Tear down the class-level fixtures.
         """
         cls.get_patcher.stop()
+
+    def setUp(self):
+        """
+        Set up instance-level fixtures.
+        """
+        self.get_patcher = self.__class__.get_patcher
 
     def test_public_repos(self):
         """
