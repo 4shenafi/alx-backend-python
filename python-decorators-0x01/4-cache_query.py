@@ -1,5 +1,5 @@
-# 4-cache_query.py
-import sqlite3
+import time
+import sqlite3 
 import functools
 
 query_cache = {}
@@ -34,10 +34,8 @@ def fetch_users_with_cache(conn, query):
     cursor.execute(query)
     return cursor.fetchall()
 
-# First call will cache the result
+#### First call will cache the result
 users = fetch_users_with_cache(query="SELECT * FROM users")
 
-# Second call will use the cache
+#### Second call will use the cached result
 users_again = fetch_users_with_cache(query="SELECT * FROM users")
-
-print(users)

@@ -1,6 +1,8 @@
 import sqlite3
 import functools
 
+#### decorator to lof SQL queries
+
 def log_queries(func):
     """Decorator that logs the SQL query before executing it."""
     @functools.wraps(func)
@@ -18,6 +20,5 @@ def fetch_all_users(query):
     conn.close()
     return results
 
-# Test the function
+#### fetch users while logging the query
 users = fetch_all_users(query="SELECT * FROM users")
-print(users)

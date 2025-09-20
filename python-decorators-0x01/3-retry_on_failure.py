@@ -1,7 +1,8 @@
-# 3-retry_on_failure.py
 import time
-import sqlite3
+import sqlite3 
 import functools
+
+#### paste your with_db_decorator here
 
 def with_db_connection(func):
     @functools.wraps(func)
@@ -37,6 +38,7 @@ def fetch_users_with_retry(conn):
     cursor.execute("SELECT * FROM users")
     return cursor.fetchall()
 
-# Test
+#### attempt to fetch users with automatic retry on failure
+
 users = fetch_users_with_retry()
 print(users)

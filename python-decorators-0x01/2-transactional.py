@@ -1,5 +1,4 @@
-# 2-transactional.py
-import sqlite3
+import sqlite3 
 import functools
 
 def with_db_connection(func):
@@ -26,11 +25,12 @@ def transactional(func):
             raise
     return wrapper
 
-@with_db_connection
-@transactional
-def update_user_email(conn, user_id, new_email):
-    cursor = conn.cursor()
-    cursor.execute("UPDATE users SET email = ? WHERE id = ?", (new_email, user_id))
+@with_db_connection 
+@transactional 
+def update_user_email(conn, user_id, new_email): 
+    cursor = conn.cursor() 
+    cursor.execute("UPDATE users SET email = ? WHERE id = ?", (new_email, user_id)) 
 
-# Test
-update_user_email(user_id=1, new_email='test@example.com')
+#### Update user's email with automatic transaction handling 
+
+update_user_email(user_id=1, new_email='Crawford_Cartwright@hotmail.com')
