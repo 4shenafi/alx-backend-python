@@ -1,0 +1,224 @@
+#!/bin/bash
+
+# kubctl-0x01 - Kubernetes scaling and load testing script
+# This script scales the Django app and performs load testing
+
+set -e  # Exit on any error
+
+echo "🚀 Starting Kubernetes scaling and load testing..."
+
+# Function to check if kubectl is available
+check_kubectl() {
+    if ! command -v kubectl &> /dev/null; then
+        echo "❌ kubectl is not installed or not in PATH"
+        exit 1
+    fi
+    echo "✅ kubectl is available"
+}
+
+# Function to check if wrk is installed
+check_wrk() {
+    if ! command -v wrk &> /dev/null; then
+        echo "⚠️  wrk is not installed. Installing wrk..."
+        
+        # Install wrk (Ubuntu/Debian)
+        if command -v apt &> /dev/null; then
+            sudo apt update
+            sudo apt install -y wrk
+        else
+            echo "Please install wrk manually for your OS"
+            echo "For Ubuntu/Debian: sudo apt install wrk"
+            echo "For macOS: brew install wrk"
+            exit 1
+        fi
+    else
+        echo "✅ wrk is available"
+    fi
+}
+
+# Function to scale the deployment to 3 replicas
+scale_deployment() {
+    echo "📈 Scaling messaging-app-deployment to 3 replicas..."
+    
+    kubectl scale deployment messaging-app-deployment --replicas=3
+    
+    echo "⏳ Waiting for scaling to complete..."
+    kubectl rollout status deployment/messaging-app-deployment --timeout=300s
+    
+    echo "✅ Deployment scaled successfully"
+}
+
+# Function to verify multiple pods are running
+verify_pods() {
+    echo "🔍 Verifying multiple pods are running..."
+    
+    echo "📦 Current pods:"
+    kubectl get pods -l app=messaging-app -o wide
+    
+    echo ""
+    echo "📊 Pod status details:"
+    kubectl get pods -l app=messaging-app -o custom-columns=NAME:.metadata.name,STATUS:.status.phase,READY:.status.containerStatuses[0].ready,NODE:.spec.nodeName
+    
+    # Count running pods
+    RUNNING_PODS=$(kubectl get pods -l app=messaging-app --field-selector=status.phase=Running --no-headers | wc -l)
+    echo ""
+    echo "🎯 Running pods count: $RUNNING_PODS"
+    
+    if [ "$RUNNING_PODS" -ge 3 ]; then
+        echo "✅ Successfully scaled to 3+ running pods"
+    else
+        echo "⚠️  Expected 3 pods, but only $RUNNING_PODS are running"
+    fi
+}
+
+# Function to get service endpoint for load testing
+get_service_endpoint() {
+    echo "🌐 Getting service endpoint for load testing..."
+    
+    # Get the service details
+    kubectl get service messaging-app-service
+    
+    # For minikube, we need to use port-forward or get the external IP
+    echo ""
+    echo "🔗 Setting up port forwarding for load testing..."
+    
+    # Start port forwarding in background
+    kubectl port-forward service/messaging-app-service 8080:8000 &
+    PORT_FORWARD_PID=$!
+    
+    # Wait for port forwarding to be ready
+    sleep 5
+    
+    echo "✅ Port forwarding active on localhost:8080 (PID: $PORT_FORWARD_PID)"
+    
+    # Store PID for cleanup
+    echo $PORT_FORWARD_PID > /tmp/port_forward.pid
+}
+
+# Function to perform load testing with wrk
+perform_load_test() {
+    echo "🔥 Starting load testing with wrk..."
+    
+    # Test endpoint
+    ENDPOINT="http://localhost:8080"
+    
+    echo "🎯 Testing endpoint: $ENDPOINT"
+    
+    # Basic connectivity test
+    echo "🔍 Basic connectivity test..."
+    if curl -s --max-time 10 "$ENDPOINT" > /dev/null; then
+        echo "✅ Endpoint is reachable"
+    else
+        echo "❌ Endpoint is not reachable"
+        return 1
+    fi
+    
+    echo ""
+    echo "📊 Load Test 1: 10 seconds, 2 threads, 10 connections"
+    wrk -t2 -c10 -d10s --latency "$ENDPOINT"
+    
+    echo ""
+    echo "📊 Load Test 2: 30 seconds, 4 threads, 20 connections"
+    wrk -t4 -c20 -d30s --latency "$ENDPOINT"
+    
+    echo ""
+    echo "📊 Load Test 3: 60 seconds, 8 threads, 50 connections"
+    wrk -t8 -c50 -d60s --latency "$ENDPOINT"
+}
+
+# Function to monitor resource usage
+monitor_resources() {
+    echo "📈 Monitoring resource usage..."
+    
+    echo "🔍 Node resource usage:"
+    kubectl top nodes 2>/dev/null || echo "⚠️  Metrics server not available for node stats"
+    
+    echo ""
+    echo "🔍 Pod resource usage:"
+    kubectl top pods -l app=messaging-app 2>/dev/null || echo "⚠️  Metrics server not available for pod stats"
+    
+    echo ""
+    echo "📊 Detailed pod resource information:"
+    kubectl describe pods -l app=messaging-app | grep -A 10 "Requests\|Limits"
+    
+    echo ""
+    echo "📋 Deployment status:"
+    kubectl get deployment messaging-app-deployment -o wide
+}
+
+# Function to show scaling results
+show_scaling_results() {
+    echo "📊 Scaling Results Summary"
+    echo "========================="
+    
+    echo "🎯 Final pod count:"
+    kubectl get pods -l app=messaging-app --no-headers | wc -l
+    
+    echo ""
+    echo "📦 Pod distribution across nodes:"
+    kubectl get pods -l app=messaging-app -o custom-columns=NAME:.metadata.name,NODE:.spec.nodeName
+    
+    echo ""
+    echo "⚡ Service endpoints:"
+    kubectl get endpoints messaging-app-service
+    
+    echo ""
+    echo "🔄 Deployment replicas:"
+    kubectl get deployment messaging-app-deployment -o jsonpath='{.spec.replicas}'
+    echo " (desired)"
+    kubectl get deployment messaging-app-deployment -o jsonpath='{.status.readyReplicas}'
+    echo " (ready)"
+}
+
+# Function to cleanup
+cleanup() {
+    echo "🧹 Cleaning up..."
+    
+    # Kill port forwarding if it exists
+    if [ -f /tmp/port_forward.pid ]; then
+        PID=$(cat /tmp/port_forward.pid)
+        if kill -0 $PID 2>/dev/null; then
+            kill $PID
+            echo "✅ Port forwarding stopped"
+        fi
+        rm -f /tmp/port_forward.pid
+    fi
+}
+
+# Trap to ensure cleanup on exit
+trap cleanup EXIT
+
+# Main execution
+main() {
+    echo "🎯 Kubernetes Scaling and Load Testing Script"
+    echo "============================================="
+    
+    # Check prerequisites
+    check_kubectl
+    check_wrk
+    
+    # Scale deployment
+    scale_deployment
+    
+    # Verify pods
+    verify_pods
+    
+    # Get service endpoint
+    get_service_endpoint
+    
+    # Perform load testing
+    perform_load_test
+    
+    # Monitor resources
+    monitor_resources
+    
+    # Show results
+    show_scaling_results
+    
+    echo ""
+    echo "🎉 Scaling and load testing completed successfully!"
+    echo "💡 The Django app is now running with 3 replicas and has been load tested"
+}
+
+# Run main function
+main "$@"

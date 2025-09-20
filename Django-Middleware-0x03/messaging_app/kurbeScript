@@ -1,0 +1,148 @@
+#!/bin/bash
+
+# kurbeScript - Kubernetes cluster setup and verification script
+# This script sets up a local Kubernetes cluster using minikube
+
+set -e  # Exit on any error
+
+echo "🚀 Starting Kubernetes cluster setup..."
+
+# Function to check if minikube is installed
+check_minikube() {
+    if ! command -v minikube &> /dev/null; then
+        echo "❌ minikube is not installed. Installing minikube..."
+        
+        # Install minikube (Ubuntu/Debian)
+        if command -v apt &> /dev/null; then
+            curl -LO https://storage.googleapis.com/minikube/releases/latest/minikube-linux-amd64
+            sudo install minikube-linux-amd64 /usr/local/bin/minikube
+            rm minikube-linux-amd64
+        else
+            echo "Please install minikube manually for your OS"
+            exit 1
+        fi
+    else
+        echo "✅ minikube is already installed"
+    fi
+}
+
+# Function to check if kubectl is installed
+check_kubectl() {
+    if ! command -v kubectl &> /dev/null; then
+        echo "❌ kubectl is not installed. Installing kubectl..."
+        
+        # Install kubectl (Ubuntu/Debian)
+        if command -v apt &> /dev/null; then
+            curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+            sudo install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl
+            rm kubectl
+        else
+            echo "Please install kubectl manually for your OS"
+            exit 1
+        fi
+    else
+        echo "✅ kubectl is already installed"
+    fi
+}
+
+# Function to start minikube cluster
+start_cluster() {
+    echo "🔄 Starting minikube cluster..."
+    
+    # Stop any existing cluster
+    minikube stop 2>/dev/null || true
+    
+    # Start new cluster with sufficient resources
+    minikube start --driver=docker --memory=4096 --cpus=2 --disk-size=20g
+    
+    echo "✅ Minikube cluster started successfully"
+}
+
+# Function to verify cluster is running
+verify_cluster() {
+    echo "🔍 Verifying cluster status..."
+    
+    # Check cluster info
+    echo "📊 Cluster Information:"
+    kubectl cluster-info
+    
+    echo ""
+    echo "📋 Cluster Nodes:"
+    kubectl get nodes
+    
+    echo ""
+    echo "🎯 Context Information:"
+    kubectl config current-context
+}
+
+# Function to retrieve available pods
+get_pods() {
+    echo "📦 Retrieving available pods..."
+    
+    # Get all pods in all namespaces
+    echo "All pods in the cluster:"
+    kubectl get pods --all-namespaces
+    
+    echo ""
+    echo "Pods in default namespace:"
+    kubectl get pods
+    
+    echo ""
+    echo "System pods (kube-system namespace):"
+    kubectl get pods -n kube-system
+}
+
+# Function to show cluster status
+show_status() {
+    echo "📈 Cluster Status Summary:"
+    echo "=========================="
+    
+    echo "🔧 Minikube Status:"
+    minikube status
+    
+    echo ""
+    echo "🌐 Cluster Info:"
+    kubectl cluster-info --request-timeout=10s
+    
+    echo ""
+    echo "📊 Node Status:"
+    kubectl get nodes -o wide
+    
+    echo ""
+    echo "📦 Pod Status:"
+    kubectl get pods --all-namespaces -o wide
+}
+
+# Main execution
+main() {
+    echo "🎯 Kubernetes Cluster Setup Script"
+    echo "=================================="
+    
+    # Check prerequisites
+    check_minikube
+    check_kubectl
+    
+    # Start cluster
+    start_cluster
+    
+    # Wait for cluster to be ready
+    echo "⏳ Waiting for cluster to be ready..."
+    sleep 10
+    
+    # Verify cluster
+    verify_cluster
+    
+    # Get pods
+    get_pods
+    
+    # Show final status
+    show_status
+    
+    echo ""
+    echo "🎉 Kubernetes cluster setup completed successfully!"
+    echo "💡 You can now deploy your Django messaging app using:"
+    echo "   kubectl apply -f deployment.yaml"
+}
+
+# Run main function
+main "$@"

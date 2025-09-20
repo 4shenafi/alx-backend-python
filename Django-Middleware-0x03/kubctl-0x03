@@ -1,0 +1,285 @@
+#!/bin/bash
+
+# kubctl-0x03 - Rolling Update Script
+# This script applies rolling updates and monitors for downtime
+
+set -e  # Exit on any error
+
+echo "🚀 Starting Rolling Update Process..."
+
+# Function to check if kubectl is available
+check_kubectl() {
+    if ! command -v kubectl &> /dev/null; then
+        echo "❌ kubectl is not installed or not in PATH"
+        exit 1
+    fi
+    echo "✅ kubectl is available"
+}
+
+# Function to check if curl is available
+check_curl() {
+    if ! command -v curl &> /dev/null; then
+        echo "❌ curl is not installed or not in PATH"
+        exit 1
+    fi
+    echo "✅ curl is available"
+}
+
+# Function to get current deployment status
+get_current_status() {
+    echo "📊 Current deployment status:"
+    kubectl get deployment messaging-app-blue-deployment -o wide
+    
+    echo ""
+    echo "📦 Current pods:"
+    kubectl get pods -l app=messaging-app,environment=blue -o wide
+    
+    echo ""
+    echo "🎯 Current image version:"
+    kubectl get deployment messaging-app-blue-deployment -o jsonpath='{.spec.template.spec.containers[0].image}'
+    echo ""
+}
+
+# Function to apply the updated deployment
+apply_rolling_update() {
+    echo "🔄 Applying rolling update to version 2.0..."
+    
+    # Apply the updated deployment
+    kubectl apply -f blue_deployment.yaml
+    
+    echo "✅ Rolling update initiated"
+}
+
+# Function to monitor rollout status
+monitor_rollout() {
+    echo "👀 Monitoring rollout status..."
+    
+    # Monitor rollout status with timeout
+    echo "⏳ Waiting for rollout to complete..."
+    kubectl rollout status deployment/messaging-app-blue-deployment --timeout=600s
+    
+    echo "✅ Rollout completed successfully"
+}
+
+# Function to continuously test app availability
+test_app_availability() {
+    echo "🧪 Testing app availability during rolling update..."
+    
+    # Get service endpoint
+    SERVICE_NAME="messaging-app-blue-service"
+    
+    # Start port forwarding
+    echo "🔗 Setting up port forwarding for testing..."
+    kubectl port-forward service/$SERVICE_NAME 8080:8000 &
+    PORT_FORWARD_PID=$!
+    
+    # Wait for port forwarding to be ready
+    sleep 5
+    
+    # Test endpoint
+    ENDPOINT="http://localhost:8080"
+    
+    echo "🎯 Testing endpoint: $ENDPOINT"
+    echo "⏰ Starting continuous availability test..."
+    
+    # Initialize counters
+    TOTAL_REQUESTS=0
+    SUCCESSFUL_REQUESTS=0
+    FAILED_REQUESTS=0
+    START_TIME=$(date +%s)
+    
+    # Continuous testing loop (run for 2 minutes)
+    while [ $(($(date +%s) - START_TIME)) -lt 120 ]; do
+        TOTAL_REQUESTS=$((TOTAL_REQUESTS + 1))
+        
+        if curl -s --max-time 5 "$ENDPOINT" > /dev/null 2>&1; then
+            SUCCESSFUL_REQUESTS=$((SUCCESSFUL_REQUESTS + 1))
+            echo "✅ Request $TOTAL_REQUESTS: SUCCESS"
+        else
+            FAILED_REQUESTS=$((FAILED_REQUESTS + 1))
+            echo "❌ Request $TOTAL_REQUESTS: FAILED"
+        fi
+        
+        # Small delay between requests
+        sleep 2
+    done
+    
+    # Calculate availability percentage
+    if [ $TOTAL_REQUESTS -gt 0 ]; then
+        AVAILABILITY_PERCENT=$((SUCCESSFUL_REQUESTS * 100 / TOTAL_REQUESTS))
+    else
+        AVAILABILITY_PERCENT=0
+    fi
+    
+    echo ""
+    echo "📊 Availability Test Results:"
+    echo "============================"
+    echo "Total Requests: $TOTAL_REQUESTS"
+    echo "Successful: $SUCCESSFUL_REQUESTS"
+    echo "Failed: $FAILED_REQUESTS"
+    echo "Availability: $AVAILABILITY_PERCENT%"
+    
+    # Clean up port forwarding
+    kill $PORT_FORWARD_PID 2>/dev/null || true
+    
+    # Determine if there was downtime
+    if [ $FAILED_REQUESTS -eq 0 ]; then
+        echo "🎉 No downtime detected during rolling update!"
+        return 0
+    elif [ $AVAILABILITY_PERCENT -ge 95 ]; then
+        echo "✅ Minimal downtime detected (acceptable for rolling update)"
+        return 0
+    else
+        echo "⚠️  Significant downtime detected during rolling update"
+        return 1
+    fi
+}
+
+# Function to verify rolling update completion
+verify_rolling_update() {
+    echo "🔍 Verifying rolling update completion..."
+    
+    echo "📊 Final deployment status:"
+    kubectl get deployment messaging-app-blue-deployment -o wide
+    
+    echo ""
+    echo "📦 Final pods status:"
+    kubectl get pods -l app=messaging-app,environment=blue -o wide
+    
+    echo ""
+    echo "🎯 Final image version:"
+    kubectl get deployment messaging-app-blue-deployment -o jsonpath='{.spec.template.spec.containers[0].image}'
+    echo ""
+    
+    echo "📈 Deployment history:"
+    kubectl rollout history deployment/messaging-app-blue-deployment
+    
+    echo ""
+    echo "🔍 Pod details:"
+    kubectl describe pods -l app=messaging-app,environment=blue | grep -A 5 "Image:"
+}
+
+# Function to check for any issues
+check_for_issues() {
+    echo "🔍 Checking for any issues..."
+    
+    # Check pod status
+    FAILED_PODS=$(kubectl get pods -l app=messaging-app,environment=blue --field-selector=status.phase!=Running --no-headers | wc -l)
+    
+    if [ "$FAILED_PODS" -gt 0 ]; then
+        echo "⚠️  Found $FAILED_PODS non-running pods:"
+        kubectl get pods -l app=messaging-app,environment=blue --field-selector=status.phase!=Running
+    else
+        echo "✅ All pods are running"
+    fi
+    
+    # Check for recent events
+    echo ""
+    echo "📋 Recent events:"
+    kubectl get events --sort-by='.lastTimestamp' | tail -10
+    
+    # Check pod logs for errors
+    echo ""
+    echo "🔍 Checking pod logs for errors..."
+    PODS=$(kubectl get pods -l app=messaging-app,environment=blue --no-headers -o custom-columns=":metadata.name")
+    
+    for pod in $PODS; do
+        echo "📋 Checking logs for pod: $pod"
+        if kubectl logs "$pod" --tail=20 2>&1 | grep -i "error\|exception\|failed\|fatal" > /dev/null; then
+            echo "❌ Errors found in pod: $pod"
+            kubectl logs "$pod" --tail=20 2>&1 | grep -i "error\|exception\|failed\|fatal"
+        else
+            echo "✅ No errors found in pod: $pod"
+        fi
+    done
+}
+
+# Function to show final summary
+show_final_summary() {
+    echo "📊 Rolling Update Summary"
+    echo "========================"
+    
+    echo "🎯 Target Image: messaging-app:2.0"
+    echo "📦 Current Replicas:"
+    kubectl get deployment messaging-app-blue-deployment -o jsonpath='{.status.readyReplicas}' 2>/dev/null || echo "0"
+    echo " ready /"
+    kubectl get deployment messaging-app-blue-deployment -o jsonpath='{.spec.replicas}' 2>/dev/null || echo "0"
+    echo " desired"
+    
+    echo ""
+    echo "⏰ Update Strategy: Rolling Update"
+    echo "🔄 Max Unavailable: 25%"
+    echo "🆕 Max Surge: 25%"
+    
+    echo ""
+    echo "🌐 Service Status:"
+    kubectl get svc messaging-app-blue-service -o wide
+    
+    echo ""
+    echo "📈 Deployment Status:"
+    kubectl get deployment messaging-app-blue-deployment -o jsonpath='{.status.conditions[?(@.type=="Available")].status}' 2>/dev/null || echo "Unknown"
+    echo " (Available)"
+    kubectl get deployment messaging-app-blue-deployment -o jsonpath='{.status.conditions[?(@.type=="Progressing")].status}' 2>/dev/null || echo "Unknown"
+    echo " (Progressing)"
+}
+
+# Function to cleanup
+cleanup() {
+    echo "🧹 Cleaning up..."
+    
+    # Kill any remaining port forwarding
+    pkill -f "kubectl port-forward" 2>/dev/null || true
+}
+
+# Trap to ensure cleanup on exit
+trap cleanup EXIT
+
+# Main execution
+main() {
+    echo "🎯 Rolling Update Script"
+    echo "======================"
+    
+    # Check prerequisites
+    check_kubectl
+    check_curl
+    
+    # Get current status
+    get_current_status
+    
+    # Apply rolling update
+    apply_rolling_update
+    
+    # Start availability testing in background
+    echo "🚀 Starting availability testing in background..."
+    test_app_availability &
+    TEST_PID=$!
+    
+    # Monitor rollout
+    monitor_rollout
+    
+    # Wait for availability testing to complete
+    wait $TEST_PID
+    TEST_RESULT=$?
+    
+    # Verify rolling update
+    verify_rolling_update
+    
+    # Check for issues
+    check_for_issues
+    
+    # Show final summary
+    show_final_summary
+    
+    echo ""
+    if [ $TEST_RESULT -eq 0 ]; then
+        echo "🎉 Rolling update completed successfully with no significant downtime!"
+    else
+        echo "⚠️  Rolling update completed but with some downtime detected"
+    fi
+    
+    echo "💡 The Django app is now running version 2.0 with rolling update strategy"
+}
+
+# Run main function
+main "$@"
+

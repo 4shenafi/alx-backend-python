@@ -1,0 +1,51 @@
+# Commands used to apply the Ingress configuration
+
+# 1. Install Nginx Ingress Controller
+kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.8.2/deploy/static/provider/cloud/deploy.yaml
+
+# 2. Wait for ingress controller to be ready
+kubectl wait --namespace ingress-nginx \
+  --for=condition=ready pod \
+  --selector=app.kubernetes.io/component=controller \
+  --timeout=300s
+
+# 3. Apply the Ingress resource
+kubectl apply -f ingress.yaml
+
+# 4. Verify ingress is created
+kubectl get ingress
+
+# 5. Check ingress controller pods
+kubectl get pods -n ingress-nginx
+
+# 6. Get ingress controller service
+kubectl get svc -n ingress-nginx
+
+# 7. Test ingress connectivity (if using minikube)
+minikube addons enable ingress
+
+# 8. Get minikube IP for testing
+minikube ip
+
+# 9. Add hosts entry for testing (run as root or with sudo)
+# echo "$(minikube ip) messaging-app.local api.messaging-app.local" >> /etc/hosts
+
+# 10. Test the ingress
+curl -H "Host: messaging-app.local" http://$(minikube ip)
+
+# 11. Check ingress status and events
+kubectl describe ingress messaging-app-ingress
+
+# 12. View ingress controller logs
+kubectl logs -n ingress-nginx -l app.kubernetes.io/name=ingress-nginx
+
+# 13. Port forward for local testing (alternative to ingress)
+kubectl port-forward service/messaging-app-service 8080:8000
+
+# 14. Test API endpoints
+curl http://localhost:8080/api/
+curl http://localhost:8080/admin/
+
+# 15. Check ingress rules and backends
+kubectl get ingress messaging-app-ingress -o yaml
+

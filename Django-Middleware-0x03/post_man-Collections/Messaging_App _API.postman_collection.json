@@ -1,0 +1,204 @@
+{
+	"info": {
+		"_postman_id": "15cb31a6-b2d6-4637-9232-e22a535f2a51",
+		"name": "Messaging App API",
+		"description": "Collection for testing conversations and messages with JWT authentication.",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "45917495"
+	},
+	"item": [
+		{
+			"name": "Login - Get JWT Token",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"email\": \"meranat9104@gmail.com\",\n  \"password\": \"messimera12\"\n}\n",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "http://localhost:8000/api/token/",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "8000",
+					"path": [
+						"api",
+						"token",
+						""
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "New Conversation",
+			"request": {
+				"auth": {
+					"type": "bearer",
+					"bearer": [
+						{
+							"key": "token",
+							"value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzUwMTA1NjE3LCJpYXQiOjE3NTAxMDUzMTcsImp0aSI6IjQyM2NlMjJkOGUyNTRhYzY4NzUzOWU2OTViN2JiZDNkIiwidXNlcl9pZCI6Ijc2NTdjZDUxLTQ0NTUtNDg4Mi05YWI3LWUxMDVkOGQ2OTRjNCJ9.CmqTue5eV91IPZG0HOXNMfCCgoaWSzsd4Br1hbkCThM",
+							"type": "string"
+						}
+					]
+				},
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"participant_ids\": [\"7657cd51-4455-4882-9ab7-e105d8d694c4\",\"bfdc7d6f-69d5-4d47-91b4-b2aaea545a7e\"]\n}\n",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "http://localhost:8000/api/conversations/",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "8000",
+					"path": [
+						"api",
+						"conversations",
+						""
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Send a Message",
+			"request": {
+				"auth": {
+					"type": "bearer",
+					"bearer": [
+						{
+							"key": "token",
+							"value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzUwMTA1NjE3LCJpYXQiOjE3NTAxMDUzMTcsImp0aSI6IjQyM2NlMjJkOGUyNTRhYzY4NzUzOWU2OTViN2JiZDNkIiwidXNlcl9pZCI6Ijc2NTdjZDUxLTQ0NTUtNDg4Mi05YWI3LWUxMDVkOGQ2OTRjNCJ9.CmqTue5eV91IPZG0HOXNMfCCgoaWSzsd4Br1hbkCThM",
+							"type": "string"
+						}
+					]
+				},
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"participant_ids\": [\"bfdc7d6f-69d5-4d47-91b4-b2aaea545a7e\"]\n}\n",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "http://localhost:8000/api/conversations/",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "8000",
+					"path": [
+						"api",
+						"conversations",
+						""
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "fetch Message",
+			"request": {
+				"auth": {
+					"type": "bearer",
+					"bearer": [
+						{
+							"key": "token",
+							"value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzUwMTA1NjE3LCJpYXQiOjE3NTAxMDUzMTcsImp0aSI6IjQyM2NlMjJkOGUyNTRhYzY4NzUzOWU2OTViN2JiZDNkIiwidXNlcl9pZCI6Ijc2NTdjZDUxLTQ0NTUtNDg4Mi05YWI3LWUxMDVkOGQ2OTRjNCJ9.CmqTue5eV91IPZG0HOXNMfCCgoaWSzsd4Br1hbkCThM",
+							"type": "string"
+						}
+					]
+				},
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "http://127.0.0.1:8000/api/conversations/a81b8769-220c-4e5b-ba6d-46874ad58bb4/messages/",
+					"protocol": "http",
+					"host": [
+						"127",
+						"0",
+						"0",
+						"1"
+					],
+					"port": "8000",
+					"path": [
+						"api",
+						"conversations",
+						"a81b8769-220c-4e5b-ba6d-46874ad58bb4",
+						"messages",
+						""
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "fetch Conversation",
+			"protocolProfileBehavior": {
+				"disableBodyPruning": true
+			},
+			"request": {
+				"auth": {
+					"type": "bearer",
+					"bearer": [
+						{
+							"key": "token",
+							"value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzUwMTA0Njg0LCJpYXQiOjE3NTAxMDQzODQsImp0aSI6ImY5ODQ1Yjc3OTQzMzRkOWI5ZWU5NmE0YzE3OGUyNjczIiwidXNlcl9pZCI6Ijc2NTdjZDUxLTQ0NTUtNDg4Mi05YWI3LWUxMDVkOGQ2OTRjNCJ9.0-eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzUwMTA1NTA2LCJpYXQiOjE3NTAxMDUyMDYsImp0aSI6IjM0MTE1Y2MzZTkxZDQwYjM5YjUyYjlmMzdjM2UwMzRhIiwidXNlcl9pZCI6Ijc2NTdjZDUxLTQ0NTUtNDg4Mi05YWI3LWUxMDVkOGQ2OTRjNCJ9.NmG-eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzUwMTA1NTA2LCJpYXQiOjE3NTAxMDUyMDYsImp0aSI6IjM0MTE1Y2MzZTkxZDQwYjM5YjUyYjlmMzdjM2UwMzRhIiwidXNlcl9pZCI6Ijc2NTdjZDUxLTQ0NTUtNDg4Mi05YWI3LWUxMDVkOGQ2OTRjNCJ9.NmG-eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzUwMTA1NjE3LCJpYXQiOjE3NTAxMDUzMTcsImp0aSI6IjQyM2NlMjJkOGUyNTRhYzY4NzUzOWU2OTViN2JiZDNkIiwidXNlcl9pZCI6Ijc2NTdjZDUxLTQ0NTUtNDg4Mi05YWI3LWUxMDVkOGQ2OTRjNCJ9.CmqTue5eV91IPZG0HOXNMfCCgoaWSzsd4Br1hbkCThM",
+							"type": "string"
+						}
+					]
+				},
+				"method": "GET",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "http://127.0.0.1:8000/admin/chats/conversation/",
+					"protocol": "http",
+					"host": [
+						"127",
+						"0",
+						"0",
+						"1"
+					],
+					"port": "8000",
+					"path": [
+						"admin",
+						"chats",
+						"conversation",
+						""
+					]
+				}
+			},
+			"response": []
+		}
+	]
+}
