@@ -3,7 +3,7 @@
 GitHub organization client for testing purposes.
 This module provides a client for interacting with GitHub organization data.
 """
-import requests
+from utils import get_json
 from typing import Dict, List, Union
 
 
@@ -34,8 +34,7 @@ class GithubOrgClient:
             Dictionary containing organization data
         """
         if self._org is None:
-            response = requests.get(f"https://api.github.com/orgs/{self._org_name}")
-            self._org = response.json()
+            self._org = get_json(f"https://api.github.com/orgs/{self._org_name}")
         return self._org
     
     @property
@@ -58,8 +57,7 @@ class GithubOrgClient:
         Returns:
             List of repository names
         """
-        response = requests.get(self._public_repos_url)
-        repos = response.json()
+        repos = get_json(self._public_repos_url)
         repo_names = [repo["name"] for repo in repos]
         
         if license is not None:
