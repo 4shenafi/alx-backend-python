@@ -1,17 +1,11 @@
 #!/usr/bin/python3
 
-import mysql.connector
+from seed import connect_to_prodev
 
 
-# ✅ Generator: Stream users in batches
 def stream_users_in_batches(batch_size):
-    connection = mysql.connector.connect(
-        host="localhost",
-        user="your_username",
-        password="your_password",
-        database="ALX_prodev"
-    )
-    cursor = connection.cursor()
+    connection = connect_to_prodev()
+    cursor = connection.cursor(dictionary=True)
     cursor.execute("SELECT user_id, name, email, age FROM user_data")
 
     while True:
@@ -24,7 +18,8 @@ def stream_users_in_batches(batch_size):
     connection.close()
 
 
-def batch_processing():
-    for batch in stream_users_in_batches(batch_size=10):
-        filtered = [user for user in batch if user[3] > 25]  # user[3] = age
-        yield filtered
+def batch_processing(batch_size):
+    for batch in stream_users_in_batches(batch_size):
+        for user in batch:
+            if user['age'] > 25:
+                yield user
