@@ -13,17 +13,21 @@ class TestGithubOrgClient(unittest.TestCase):
     """Unit test cases for GithubOrgClient"""
 
     @parameterized.expand([
-        ("google", {"login": "google"}),
-        ("abc", {"login": "abc"}),
+        ("google",),
+        ("abc",),
     ])
-    @patch('client.get_json')
-    def test_org(self, org_name: str, expected_payload: Dict, mock_get_json) -> None:
+    @patch('client.requests.get')
+    def test_org(self, org_name: str, mock_get) -> None:
         """Test GithubOrgClient.org returns expected payload"""
-        mock_get_json.return_value = expected_payload
+        test_payload = {"login": org_name}
+        mock_response = type('Response', (), {
+            'json': lambda self: test_payload
+        })()
+        mock_get.return_value = mock_response
         client = GithubOrgClient(org_name)
         result = client.org
-        self.assertEqual(result, expected_payload)
-        mock_get_json.assert_called_once_with(f"https://api.github.com/orgs/{org_name}")
+        self.assertEqual(result, test_payload)
+        mock_get.assert_called_once_with(f"https://api.github.com/orgs/{org_name}")
 
     def test_public_repos_url(self) -> None:
         """Test GithubOrgClient._public_repos_url returns expected URL"""
@@ -33,17 +37,20 @@ class TestGithubOrgClient(unittest.TestCase):
             result = client._public_repos_url
             self.assertEqual(result, "https://api.github.com/orgs/test/repos")
 
-    @patch('client.get_json')
-    def test_public_repos(self, mock_get_json) -> None:
+    @patch('client.requests.get')
+    def test_public_repos(self, mock_get) -> None:
         """Test GithubOrgClient.public_repos returns expected repo names"""
         test_payload = [{"name": "repo1"}, {"name": "repo2"}]
-        mock_get_json.return_value = test_payload
+        mock_response = type('Response', (), {
+            'json': lambda self: test_payload
+        })()
+        mock_get.return_value = mock_response
         with patch('client.GithubOrgClient._public_repos_url', new_callable=PropertyMock) as mock_url:
             mock_url.return_value = "https://api.github.com/orgs/test/repos"
             client = GithubOrgClient("test")
             result = client.public_repos()
             self.assertEqual(result, ["repo1", "repo2"])
-            mock_get_json.assert_called_once_with("https://api.github.com/orgs/test/repos")
+            mock_get.assert_called_once_with("https://api.github.com/orgs/test/repos")
             mock_url.assert_called_once()
 
     @parameterized.expand([
@@ -73,9 +80,16 @@ class TestIntegrationGithubOrgClient(unittest.TestCase):
         """Set up mocks for HTTP requests"""
         cls.get_patcher = patch('requests.get')
         cls.mock_get = cls.get_patcher.start()
-        cls.mock_get.side_effect = lambda url: type('Response', (), {
-            'json': lambda: cls.org_payload if 'orgs' in url else cls.repos_payload
-        })()
+        
+        def mock_response(url):
+            response = type('Response', (), {})()
+            if 'orgs' in url and 'repos' not in url:
+                response.json = lambda: cls.org_payload
+            else:
+                response.json = lambda: cls.repos_payload
+            return response
+        
+        cls.mock_get.side_effect = mock_response
 
     @classmethod
     def tearDownClass(cls) -> None:
