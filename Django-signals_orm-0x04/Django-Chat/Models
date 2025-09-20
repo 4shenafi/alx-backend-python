@@ -1,0 +1,208 @@
+# Django-Chat Models for Threaded Conversations
+# This file demonstrates advanced ORM techniques for threaded conversations
+
+import uuid
+from django.db import models
+from django.contrib.auth.models import AbstractBaseUser, PermissionsMixin, BaseUserManager
+from django.utils import timezone
+
+
+class CustomUserManager(BaseUserManager):
+    def create_user(self, email, password=None, **extra_fields):
+        if not email:
+            raise ValueError("The Email field is required")
+        email = self.normalize_email(email)
+        user = self.model(email=email, **extra_fields)
+        user.set_password(password)
+        user.save(using=self._db)
+        return user
+
+    def create_superuser(self, email, password, **extra_fields):
+        extra_fields.setdefault('is_staff', True)
+        extra_fields.setdefault('is_superuser', True)
+        return self.create_user(email, password, **extra_fields)
+
+
+class User(AbstractBaseUser, PermissionsMixin):
+    user_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    email = models.EmailField(unique=True)
+    first_name = models.CharField(max_length=30)
+    last_name = models.CharField(max_length=30)
+    is_active = models.BooleanField(default=True)
+    is_staff = models.BooleanField(default=False)
+    date_joined = models.DateTimeField(default=timezone.now)
+
+    USERNAME_FIELD = 'email'
+    REQUIRED_FIELDS = ['first_name', 'last_name']
+
+    objects = CustomUserManager()
+
+    def __str__(self):
+        return self.email
+
+
+class ThreadedMessage(models.Model):
+    """
+    Task 3: Threaded conversation model with self-referential foreign key
+    for parent-child message relationships (replies).
+    """
+    message_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    sender = models.ForeignKey(User, on_delete=models.CASCADE, related_name='threaded_messages_sent')
+    receiver = models.ForeignKey(User, on_delete=models.CASCADE, related_name='threaded_messages_received')
+    content = models.TextField()
+    timestamp = models.DateTimeField(default=timezone.now)
+    edited = models.BooleanField(default=False)
+    read = models.BooleanField(default=False)
+    
+    # Self-referential foreign key for threaded conversations
+    parent_message = models.ForeignKey(
+        'self', 
+        on_delete=models.CASCADE, 
+        null=True, 
+        blank=True, 
+        related_name='replies'
+    )
+    
+    # Thread depth for display purposes
+    thread_depth = models.PositiveIntegerField(default=0)
+
+    def __str__(self):
+        return f"Threaded Message from {self.sender.email} to {self.receiver.email} at {self.timestamp}"
+
+    def save(self, *args, **kwargs):
+        # Calculate thread depth based on parent message
+        if self.parent_message:
+            self.thread_depth = self.parent_message.thread_depth + 1
+        else:
+            self.thread_depth = 0
+        super().save(*args, **kwargs)
+
+    @classmethod
+    def get_threaded_conversation(cls, user1, user2):
+        """
+        Advanced ORM technique: Get all messages in a conversation with optimized queries
+        using select_related and prefetch_related to avoid N+1 query problems.
+        """
+        return cls.objects.filter(
+            models.Q(sender=user1, receiver=user2) |
+            models.Q(sender=user2, receiver=user1)
+        ).select_related('sender', 'receiver', 'parent_message').prefetch_related(
+            'replies__sender',
+            'replies__receiver',
+            'replies__replies__sender',  # Nested prefetch for deeper threads
+            'replies__replies__receiver'
+        ).order_by('timestamp')
+
+    @classmethod
+    def get_message_thread(cls, message_id):
+        """
+        Recursive query to get all replies in a thread using Django ORM.
+        """
+        message = cls.objects.select_related('sender', 'receiver').get(message_id=message_id)
+        
+        # Get all replies recursively
+        def get_replies(msg, depth=0):
+            replies = msg.replies.select_related('sender', 'receiver').all()
+            result = []
+            for reply in replies:
+                result.append({
+                    'message': reply,
+                    'depth': depth + 1,
+                    'replies': get_replies(reply, depth + 1)
+                })
+            return result
+        
+        return {
+            'message': message,
+            'depth': 0,
+            'replies': get_replies(message)
+        }
+
+    def get_all_replies(self):
+        """
+        Get all replies to this message using a single optimized query.
+        """
+        return self.replies.select_related('sender', 'receiver').prefetch_related(
+            'replies__sender',
+            'replies__receiver'
+        ).all()
+
+
+class Conversation(models.Model):
+    """
+    Conversation model to group threaded messages.
+    """
+    conversation_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    participants = models.ManyToManyField(User, related_name='conversations')
+    created_at = models.DateTimeField(default=timezone.now)
+    last_message_at = models.DateTimeField(null=True, blank=True)
+
+    def __str__(self):
+        return f"Conversation {self.conversation_id}"
+
+    def get_latest_messages(self, limit=20):
+        """
+        Get latest messages in conversation with optimized queries.
+        """
+        return ThreadedMessage.objects.filter(
+            models.Q(sender__in=self.participants.all()) &
+            models.Q(receiver__in=self.participants.all())
+        ).select_related('sender', 'receiver', 'parent_message').prefetch_related(
+            'replies__sender',
+            'replies__receiver'
+        ).order_by('-timestamp')[:limit]
+
+    def get_unread_count(self, user):
+        """
+        Get count of unread messages for a specific user.
+        """
+        return ThreadedMessage.objects.filter(
+            receiver=user,
+            read=False,
+            sender__in=self.participants.exclude(user_id=user.user_id)
+        ).count()
+
+
+# Advanced ORM Techniques Examples:
+
+class MessageQuerySet(models.QuerySet):
+    """
+    Custom QuerySet for advanced message filtering and optimization.
+    """
+    def for_conversation(self, user1, user2):
+        return self.filter(
+            models.Q(sender=user1, receiver=user2) |
+            models.Q(sender=user2, receiver=user1)
+        )
+
+    def with_replies(self):
+        return self.prefetch_related('replies__sender', 'replies__receiver')
+
+    def unread_for_user(self, user):
+        return self.filter(receiver=user, read=False)
+
+    def recent(self, days=7):
+        from django.utils import timezone
+        from datetime import timedelta
+        return self.filter(timestamp__gte=timezone.now() - timedelta(days=days))
+
+
+class ThreadedMessageManager(models.Manager):
+    """
+    Custom manager with advanced ORM techniques.
+    """
+    def get_queryset(self):
+        return MessageQuerySet(self.model, using=self._db)
+
+    def for_conversation(self, user1, user2):
+        return self.get_queryset().for_conversation(user1, user2).with_replies()
+
+    def unread_for_user(self, user):
+        return self.get_queryset().unread_for_user(user).select_related('sender')
+
+    def recent_threads(self, days=7):
+        return self.get_queryset().recent(days).with_replies()
+
+
+# Add the custom manager to ThreadedMessage
+ThreadedMessage.add_to_class('objects', ThreadedMessageManager())

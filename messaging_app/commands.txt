@@ -48,3 +48,4 @@ curl http://localhost:8080/admin/
 
 # 15. Check ingress rules and backends
 kubectl get ingress messaging-app-ingress -o yaml
+

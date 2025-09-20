@@ -97,3 +97,4 @@ spec:
             name: messaging-app-green-service
             port:
               number: 8000
+
