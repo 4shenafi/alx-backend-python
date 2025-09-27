@@ -13,6 +13,9 @@ from parameterized import parameterized, parameterized_class
 from client import GithubOrgClient
 from fixtures import TEST_PAYLOAD
 
+# Extract the test data from TEST_PAYLOAD
+org_payload, repos_payload, expected_repos, apache2_repos = TEST_PAYLOAD[0]
+
 
 class TestGithubOrgClient(unittest.TestCase):
     """Test the GithubOrgClient class.
@@ -21,7 +24,7 @@ class TestGithubOrgClient(unittest.TestCase):
     constructs API requests and processes responses without making
     actual HTTP calls to GitHub.
     """
-    
+
     @parameterized.expand([
         # Test case 1: Google organization
         ("google",),
@@ -177,10 +180,14 @@ class TestGithubOrgClient(unittest.TestCase):
         self.assertEqual(result, expected)
 
 
-@parameterized_class(
-    ("org_payload", "repos_payload", "expected_repos", "apache2_repos"),
-    [TEST_PAYLOAD]
-)
+@parameterized_class([
+    {
+        "org_payload": org_payload,
+        "repos_payload": repos_payload,
+        "expected_repos": expected_repos,
+        "apache2_repos": apache2_repos,
+    }
+])
 class TestIntegrationGithubOrgClient(unittest.TestCase):
     """Integration tests for GithubOrgClient.
     
