@@ -1,52 +1,118 @@
-# messaging_app/chats/views.py
-from rest_framework import viewsets, filters
-from rest_framework.decorators import action
+from django.http import JsonResponse
+from django.shortcuts import get_object_or_404
+from rest_framework import viewsets, status, filters
 from rest_framework.response import Response
+from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
-from django.views.decorators.cache import cache_page
-from django.utils.decorators import method_decorator
-from .models import User, Conversation, Message
-from .serializers import UserSerializer, ConversationSerializer, MessageSerializer
+from django_filters.rest_framework import DjangoFilterBackend
+
+from .models import Conversation, Message
+from .serializers import ConversationSerializer, MessageSerializer
 from .permissions import IsParticipantOfConversation
-from .pagination import MessagePagination
 from .filters import MessageFilter
+from .pagination import MessagePagination
+
 
 class ConversationViewSet(viewsets.ModelViewSet):
-    queryset = Conversation.objects.all()
+    """ViewSet for Conversations"""
     serializer_class = ConversationSerializer
     permission_classes = [IsAuthenticated, IsParticipantOfConversation]
-    filter_backends = [filters.SearchFilter, filters.OrderingFilter]
-    search_fields = ['participants__email']
-    ordering_fields = ['created_at']
-
-    def perform_create(self, serializer):
-        conversation = serializer.save()
-        conversation.participants.add(self.request.user)
-        return conversation
-
-    @action(detail=True, methods=['post'])
-    def add_message(self, request, pk=None):
-        conversation = self.get_object()
-        serializer = MessageSerializer(data=request.data)
-        if serializer.is_valid():
-            serializer.save(conversation=conversation, sender=request.user)
-            return Response(serializer.data, status=201)
-        return Response(serializer.errors, status=400)
-
-@method_decorator(cache_page(60), name='list')
-class MessageViewSet(viewsets.ModelViewSet):
-    queryset = Message.objects.all()
-    serializer_class = MessageSerializer
-    permission_classes = [IsAuthenticated, IsParticipantOfConversation]
-    filter_backends = [filters.SearchFilter, filters.OrderingFilter]
-    search_fields = ['message_body']
-    ordering_fields = ['sent_at']
-    pagination_class = MessagePagination
-    filterset_class = MessageFilter
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter]
+    search_fields = ["participants__username", "participants__first_name", "participants__last_name"]
+    filterset_fields = ["participants"]
 
     def get_queryset(self):
-        queryset = super().get_queryset()
-        conversation_id = self.request.query_params.get('conversation_id')
-        if conversation_id:
-            queryset = queryset.filter(conversation__conversation_id=conversation_id)
-        return queryset
+        """
+        ✅ Users should only see conversations they are part of
+        """
+        return Conversation.objects.filter(participants=self.request.user)
+
+    def create(self, request, *args, **kwargs):
+        """
+        Create a new conversation with participants
+        """
+        participants = request.data.get("participants", [])
+        if not participants or len(participants) < 2:
+            return Response(
+                {"error": "At least two participants are required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        conversation = Conversation.objects.create()
+        conversation.participants.set(participants)
+        conversation.save()
+
+        serializer = self.get_serializer(conversation)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+    def perform_create(self, serializer):
+        """Ensure creator is part of the conversation"""
+        conversation = serializer.save()
+        conversation.participants.add(self.request.user)
+
+
+class MessageViewSet(viewsets.ModelViewSet):
+    """ViewSet for Messages"""
+    serializer_class = MessageSerializer
+    permission_classes = [IsAuthenticated, IsParticipantOfConversation]
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter]
+    search_fields = ["sender__first_name", "sender__last_name", "message_body"]
+    filterset_class = MessageFilter
+    pagination_class = MessagePagination
+
+    def get_queryset(self):
+        """
+        ✅ Ensure users only see messages from conversations they participate in
+        """
+        return Message.objects.filter(conversation__participants=self.request.user)
+
+    def create(self, request, *args, **kwargs):
+        """
+        Send a message to an existing conversation
+        """
+        conversation_id = request.data.get("conversation")
+        message_body = request.data.get("message_body")
+
+        conversation = get_object_or_404(Conversation, pk=conversation_id)
+
+        # ✅ Check participant access
+        if request.user not in conversation.participants.all():
+            return Response(
+                {"error": "You are not allowed to send messages in this conversation."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        message = Message.objects.create(
+            conversation=conversation,
+            sender=request.user,
+            message_body=message_body,
+        )
+        serializer = self.get_serializer(message)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+    @action(detail=True, methods=["get"])
+    def by_conversation(self, request, pk=None):
+        """
+        Custom endpoint to get all messages in a conversation
+        """
+        conversation = get_object_or_404(Conversation, pk=pk)
+
+        # ✅ Ensure only participants can view
+        if request.user not in conversation.participants.all():
+            return Response(
+                {"error": "You are not allowed to view this conversation."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        messages = conversation.messages.all().order_by("sent_at")
+        page = self.paginate_queryset(messages)
+        if page is not None:
+            serializer = self.get_serializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
+
+        serializer = self.get_serializer(messages, many=True)
+        return Response(serializer.data)
+
+
+def index(request):
+    return JsonResponse({"message": "Messaging app API is running 🚀"})

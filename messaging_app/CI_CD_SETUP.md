@@ -165,3 +165,4 @@ docker push your-username/messaging-app:latest
 3. Implement rolling updates
 4. Add monitoring and alerting
 5. Set up staging environment
+

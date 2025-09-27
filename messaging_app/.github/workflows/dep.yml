@@ -59,3 +59,4 @@ jobs:
         echo "Docker image built and pushed successfully!"
         echo "Tags: ${{ steps.meta.outputs.tags }}"
         echo "Image: ${{ secrets.DOCKER_USERNAME }}/${{ env.DOCKER_IMAGE }}"
+
