@@ -10,6 +10,7 @@ from typing import (
 
 from utils import (
     access_nested_map,
+    get_json,
     memoize,
 )
 
@@ -26,8 +27,7 @@ class GithubOrgClient:
     @memoize
     def org(self) -> Dict:
         """Memoize org"""
-        response = requests.get(self.ORG_URL.format(org=self._org_name))
-        return response.json()
+        return get_json(self.ORG_URL.format(org=self._org_name))
 
     @property
     def _public_repos_url(self) -> str:
@@ -37,8 +37,7 @@ class GithubOrgClient:
     @memoize
     def repos_payload(self) -> Dict:
         """Memoize repos payload"""
-        response = requests.get(self._public_repos_url)
-        return response.json()
+        return get_json(self._public_repos_url)
 
     def public_repos(self, license: str = None) -> List[str]:
         """Public repos"""
